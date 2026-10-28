@@ -5,7 +5,6 @@ const API_KEYS_GNEWS = [
   "2b42036f62c14806b415a240b15b999f"
 ];
 
-// Pega automaticamente todas as chaves do Groq do .env
 const getGroqKeys = () => {
   return Object.keys(process.env)
     .filter(key => key.startsWith('GROQ_API_KEY'))
@@ -25,7 +24,7 @@ export default async function handler(req, res) {
   const query = 'games OR videogame OR esports OR PlayStation OR Xbox OR Nintendo';
   let fetchedArticles = null;
 
-  // 1. BUSCAR NOTÍCIAS NO GNEWS (Com rotação de chaves)
+  // 1. BUSCAR NOTÍCIAS NO GNEWS
   for (const key of API_KEYS_GNEWS) {
     try {
       const gnewsUrl = `https://gnews.io/api/v4/search?q=${encodeURIComponent(query)}&lang=pt&sortby=publishedAt&max=5&apikey=${key}`;
@@ -47,7 +46,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ success: false, message: "Nenhuma API key do GNews funcionou." });
   }
 
-  // 2. REESCREVER A PRIMEIRA NOTÍCIA USANDO GROQ (Com rotação de chaves)
+  // 2. REESCREVER A NOTÍCIA COM ROTAÇÃO DE CHAVES DO GROQ
   try {
     const mainArticle = fetchedArticles[0];
     const otherArticles = fetchedArticles.slice(1);
@@ -67,7 +66,6 @@ export default async function handler(req, res) {
     let rewrittenMainArticle = mainArticle;
     const groqKeys = getGroqKeys();
 
-    // LOOP DE ROTAÇÃO DAS CHAVES DO GROQ
     for (const groqKey of groqKeys) {
       try {
         const groqUrl = `https://api.groq.com/openai/v1/chat/completions`;
@@ -79,7 +77,8 @@ export default async function handler(req, res) {
             'Authorization': `Bearer ${groqKey}`
           },
           body: JSON.stringify({
-            model: "llama3-8b-8192",
+            // 👇 O MODELO FOI ATUALIZADO AQUI
+            model: "llama-3.1-8b-instant", 
             messages: [
               { role: "system", content: "Você é um jornalista de games focado em notícias reais e textos autorais." },
               { role: "user", content: prompt }
@@ -99,7 +98,7 @@ export default async function handler(req, res) {
               content: newText,
               isRewritten: true,
             };
-            break; // Se funcionou, para o loop e não tenta as próximas chaves
+            break; // Para o loop se der certo
           }
         } else {
            console.warn(`⚠️ Chave Groq ...${groqKey.slice(-4)} falhou. Tentando próxima...`);
