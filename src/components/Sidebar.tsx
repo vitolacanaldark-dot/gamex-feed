@@ -1,27 +1,40 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext.tsx';
 import { calculateDaysRemaining } from '../utils/gamerLogic.ts';
 import { Flame, Calendar, Instagram, MessageSquare, ExternalLink, Bell, Check } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
   const { releases, toggleReleaseReminder, setActiveTab, setIsDiscordModalOpen } = useApp();
+  const [gameCovers, setGameCovers] = useState<Record<string, string>>({});
 
-  // MÁGICA DO HYPE: Filtra os não lançados, ordena por hype e pega os 3 primeiros
   const topHypeReleases = [...releases]
     .filter(game => !calculateDaysRemaining(game.releaseDate).isReleased)
     .sort((a, b) => b.hypeScore - a.hypeScore)
     .slice(0, 3);
 
-  // EFEITO PARA CARREGAR O WIDGET DO ELFSIGHT (INSTAGRAM)
+  // Busca as capas reais na API da Vercel
   useEffect(() => {
-    // Verifica se o script já foi adicionado ao DOM para não duplicar
-    if (!document.querySelector('script[src="https://elfsightcdn.com/platform.js"]')) {
-      const script = document.createElement('script');
-      script.src = "https://elfsightcdn.com/platform.js";
-      script.async = true;
-      document.body.appendChild(script);
-    }
-  }, []);
+    const fetchCovers = async () => {
+      const covers: Record<string, string> = {};
+      
+      for (const game of topHypeReleases) {
+        try {
+          const response = await fetch(`/api/game-cover?title=${encodeURIComponent(game.title)}`);
+          if (response.ok) {
+            const data = await response.json();
+            if (data.imageUrl) {
+              covers[game.id] = data.imageUrl;
+            }
+          }
+        } catch (error) {
+          console.warn(`Erro ao buscar capa para ${game.title}`);
+        }
+      }
+      setGameCovers(covers);
+    };
+
+    fetchCovers();
+  }, [releases]); // Executa quando a lista de lançamentos muda
 
   return (
     <aside className="space-y-5 w-full" aria-label="Barra Lateral de Destaques">
@@ -51,7 +64,7 @@ export const Sidebar: React.FC = () => {
         </div>
       </div>
 
-      {/* 2. Principais Colaboradores (Pódio Vazio) */}
+      {/* 2. Principais Colaboradores */}
       <div className="glass-panel rounded-2xl p-5 border border-white/10 w-full">
         <div className="flex items-center gap-2 mb-1">
           <Flame className="w-5 h-5 text-[#39FF14]" />
@@ -76,12 +89,9 @@ export const Sidebar: React.FC = () => {
             <span className="text-xs text-gray-500 mt-2">3º</span>
           </div>
         </div>
-        <div className="text-center">
-          <span className="text-[10px] text-gray-500 block">O ranking será atualizado conforme os usuários postam, comentam e recebem curtidas.</span>
-        </div>
       </div>
 
-      {/* 3. Game Release Radar (Ordenado por Hype) */}
+      {/* 3. Game Release Radar (Com capas reais) */}
       <div className="glass-panel rounded-2xl p-5 border border-white/10 w-full">
         <div className="flex items-center justify-between mb-4 pb-2 border-b border-white/10">
           <div className="flex items-center gap-2">
@@ -93,11 +103,12 @@ export const Sidebar: React.FC = () => {
         <div className="space-y-3.5">
           {topHypeReleases.map((game) => {
             const remaining = calculateDaysRemaining(game.releaseDate);
+            const coverUrl = gameCovers[game.id] || game.coverImage; // Usa a capa real ou a que já estava no mock
+
             return (
               <div key={game.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-white/[0.02] border border-white/5 hover:border-[#00FFFF]/40 transition-all group">
                 <div className="relative shrink-0">
-                  <img src={game.coverImage} alt={game.title} className="w-12 h-14 rounded-lg object-cover ring-1 ring-white/10" />
-                  {/* Badge de Hype */}
+                  <img src={coverUrl} alt={game.title} className="w-12 h-14 rounded-lg object-cover ring-1 ring-white/10" />
                   <span className="absolute -top-1.5 -right-1.5 bg-amber-500 text-black text-[9px] font-black px-1.5 py-0.5 rounded shadow-sm flex items-center gap-0.5">
                     <Flame className="w-2.5 h-2.5 fill-black" /> {game.hypeScore}
                   </span>
@@ -116,34 +127,30 @@ export const Sidebar: React.FC = () => {
         </div>
       </div>
 
-      {/* 4. Instagram do GAMEx FEED (Elfsight Widget) */}
-      <div className="glass-panel rounded-2xl p-5 border border-white/10 w-full overflow-hidden">
+      {/* 4. Instagram do GAMEx FEED */}
+      <div className="glass-panel rounded-2xl p-5 border border-white/10 w-full">
         <div className="flex items-center justify-between mb-3 pb-2 border-b border-white/10">
           <div className="flex items-center gap-2">
             <Instagram className="w-4 h-4 text-pink-500" />
             <h3 className="font-orbitron text-sm font-bold text-white tracking-wider uppercase">INSTAGRAM OFICIAL</h3>
           </div>
-          <a href="https://instagram.com/gamexfeed" target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold text-[#39FF14] hover:underline">
-            @gamexfeed
-          </a>
+          <span className="text-[10px] font-bold text-[#39FF14]">128.4K seguidores</span>
         </div>
-        
-        {/* AQUI ENTRA O WIDGET DO ELFSIGHT */}
-        <div className="w-full flex justify-center">
-          <div 
-            className="elfsight-app-2f7c5d83-c833-4a66-96cc-8b715eb74d0a w-full" 
-            data-elfsight-app-lazy
-          ></div>
+        <div className="flex items-center gap-3 mb-3">
+          <img src="/logotipo.png" alt="GAMEx FEED Avatar Oficial" className="w-10 h-10 rounded-full aspect-square object-contain p-0.5 bg-black/60 border border-[#39FF14]/70 shadow-[0_0_8px_rgba(57,255,20,0.3)]" onError={(e) => { (e.target as HTMLImageElement).src = 'https://i.imgur.com/uXOvpRq.png'; }} />
+          <div>
+            <div className="text-xs font-bold text-white">@gamexfeed</div>
+            <div className="text-[11px] text-gray-400">Reels diários, memes e notícias rápidas</div>
+          </div>
         </div>
-        
-        <a 
-          href="https://instagram.com/gamexfeed" 
-          target="_blank" 
-          rel="noopener noreferrer" 
-          className="w-full block py-2 mt-4 text-center rounded-xl bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 text-white font-bold text-xs hover:opacity-90 transition-opacity"
-        >
-          Seguir @gamexfeed no Instagram
-        </a>
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="aspect-square rounded-lg overflow-hidden bg-black/40 relative group">
+              <div className="w-full h-full flex items-center justify-center text-xs text-gray-600">Foto {i}</div>
+            </div>
+          ))}
+        </div>
+        <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="w-full block py-2 text-center rounded-xl bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 text-white font-bold text-xs hover:opacity-90 transition-opacity">Seguir @gamexfeed no Instagram</a>
       </div>
     </aside>
   );
