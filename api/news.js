@@ -75,8 +75,8 @@ export default async function handler(req, res) {
             'Authorization': `Bearer ${groqKey}`
           },
           body: JSON.stringify({
-            // 👇 MODELO ATUAL DA GROQ
-            model: "llama-3.3-70b-versatile", 
+            // 👇 MODELO ATUAL DA GROQ (GPT-OSS)
+            model: "openai/gpt-oss-120b", 
             messages: [
               { role: "system", content: "Você é um jornalista de games focado em notícias reais e textos autorais." },
               { role: "user", content: prompt }
