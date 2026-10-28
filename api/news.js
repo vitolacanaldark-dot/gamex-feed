@@ -41,7 +41,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ success: false, message: "Nenhuma API key do GNews funcionou." });
   }
 
-  // 2. REESCREVER COM O GEMINI (Chamada Direta via REST API)
+  // 2. REESCREVER COM O GEMINI (Usando o novo Header X-goog-api-key)
   try {
     const rewrittenArticles = await Promise.all(fetchedArticles.map(async (art) => {
       
@@ -58,12 +58,15 @@ export default async function handler(req, res) {
       `;
 
       try {
-        // Chamada direta para a API do Gemini usando o modelo 1.5 Flash
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+        // Usando o endpoint que o seu curl mostrou que funciona
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent`;
         
         const response = await fetch(geminiUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'X-goog-api-key': GEMINI_API_KEY // <--- AQUI ESTÁ A MÁGICA
+          },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }]
           })
