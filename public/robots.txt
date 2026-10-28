@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://gamex-feed.vercel.app/sitemap.xml
