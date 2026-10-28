@@ -1,6 +1,4 @@
 // src/newsService.ts
-import { INITIAL_NEWS } from './data/mockData';
-
 const GAMEX_AUTHOR = {
   id: 'user-admin',
   name: 'GAMEx FEED',
@@ -15,17 +13,13 @@ const CACHE_TIME_MS = 5 * 60 * 1000; // 5 minutos
 
 const formatGNews = (articles: any[]) => {
   return articles.map((art: any, index: number) => {
-    // Verifica se a notícia foi reescrita pela IA
     const isRewritten = art.isRewritten || false;
-    
-    // Limpa o texto "[1936 chars]" caso a notícia não tenha sido reescrita
     const rawContent = art.content || art.description || '';
     const cleanContent = rawContent.replace(/\[\+\d+\s+chars\]/gi, '').replace(/\[\d+\s+chars\]/gi, '').trim();
 
     return {
       id: `gnews-${Date.now()}-${index}`,
       title: art.title,
-      // Se foi reescrita, o link é interno (para não abrir a fonte). Se não, é o link original.
       slug: isRewritten ? `noticia-${Date.now()}-${index}` : art.url, 
       excerpt: art.description,
       content: cleanContent, 
@@ -55,7 +49,7 @@ export const fetchRealNews = async (force: boolean = false) => {
   let fetchedNews: any[] = [];
 
   try {
-    const apiUrl = "/api/news"; 
+    const apiUrl = `/api/news?t=${Date.now()}`; // O '?t=' evita cache da Vercel
     
     const response = await fetch(apiUrl);
     
@@ -66,36 +60,14 @@ export const fetchRealNews = async (force: boolean = false) => {
         fetchedNews = formatGNews(data.articles);
       }
     } else {
-        console.warn(`⚠️ API Route falhou. (Normal no localhost sem vercel dev)`);
+        console.warn(`⚠️ API Route falhou.`);
     }
   } catch (error) {
     console.warn(`⚠️ Erro ao chamar a API Route.`);
   }
 
-  // Juntar notícias e cache (Fallback)
-  let existingNews = cachedNewsString ? JSON.parse(cachedNewsString) : [];
-  
-  if (existingNews.length === 0) {
-     existingNews = INITIAL_NEWS.map((art, index) => ({
-      ...art,
-      id: `local-${index}`,
-      author: GAMEX_AUTHOR,
-      publishedAt: art.publishedAt || new Date(Date.now() - index * 3600000).toISOString(),
-    }));
-  }
-
-  const allNews = [...fetchedNews, ...existingNews];
-  const uniqueNewsMap = new Map();
-  
-  allNews.forEach(news => {
-    if (!uniqueNewsMap.has(news.title)) {
-      uniqueNewsMap.set(news.title, news);
-    }
-  });
-
-  const sortedNews = Array.from(uniqueNewsMap.values())
-    .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
-    .slice(0, 50);
+  // Se a API falhar, o array fica vazio. O site mostra a mensagem de "sem notícias".
+  const sortedNews = fetchedNews.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
 
   localStorage.setItem('gamex_news_cache', JSON.stringify(sortedNews));
   localStorage.setItem('gamex_news_last_fetch', now.toString());
