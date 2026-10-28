@@ -5,20 +5,25 @@ import {
 } from 'lucide-react';
 import { NotificationCenter } from './NotificationCenter.tsx';
 import { UserAvatarProgressRing } from './UserAvatarProgressRing.tsx';
-import { INITIAL_USER } from '../data/mockData.ts'; // Importando o usuário vazio
+import { supabase } from '../lib/supabase.ts'; // Importando o Supabase
 
 export const Header: React.FC = () => {
   const {
     activeTab, setActiveTab, setIsSearchOpen, setIsCreatePostOpen, setIsDiscordModalOpen, setIsLoginModalOpen,
-    unreadNotificationsCount, isNotificationsOpen, setIsNotificationsOpen, user, setUser,
+    unreadNotificationsCount, isNotificationsOpen, setIsNotificationsOpen, user,
   } = useApp();
 
-  // Função de Logout
-  const handleLogout = () => {
+  // Função de Logout corrigida
+  const handleLogout = async () => {
     if (window.confirm("Deseja realmente sair da sua conta Gamer?")) {
-      setUser(INITIAL_USER); // Reseta o usuário para o estado zerado
-      localStorage.removeItem('gamex_user'); // Apaga da memória do navegador
-      window.location.reload(); // Recarrega a página para voltar ao estado inicial
+      // 1. Avisa o Supabase para encerrar a sessão
+      await supabase.auth.signOut();
+      
+      // 2. Limpa o cache local (por segurança extra)
+      localStorage.removeItem('gamex_user');
+      
+      // 3. Recarrega a página para o site voltar ao estado de "Visitante"
+      window.location.reload();
     }
   };
 
@@ -79,7 +84,7 @@ export const Header: React.FC = () => {
                 <span className="hidden xl:inline">Criar Post</span>
               </button>
               <UserAvatarProgressRing />
-              {/* BOTÃO DE LOGOUT ADICIONADO AQUI */}
+              {/* BOTÃO DE LOGOUT */}
               <button 
                 onClick={handleLogout}
                 className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 transition-all shrink-0"
