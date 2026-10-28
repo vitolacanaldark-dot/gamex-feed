@@ -1,7 +1,5 @@
 // api/news.js
-import { GoogleGenerativeAI } from "@google/generative-ai";
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 const API_KEYS = [
   "81f4e37bbd147c199a3498c85ff7c572",
@@ -43,11 +41,8 @@ export default async function handler(req, res) {
     return res.status(500).json({ success: false, message: "Nenhuma API key do GNews funcionou." });
   }
 
-  // 2. REESCREVER COM O GEMINI (A MÁGICA)
+  // 2. REESCREVER COM O GEMINI (Chamada Direta via REST API)
   try {
-    // Usamos o modelo Flash, que é rápido e gratuito no tier básico
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
     const rewrittenArticles = await Promise.all(fetchedArticles.map(async (art) => {
       
       const prompt = `
@@ -63,18 +58,40 @@ export default async function handler(req, res) {
       `;
 
       try {
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const newText = response.text();
+        // Chamada direta para a API do Gemini usando o modelo 1.5 Flash
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+        
+        const response = await fetch(geminiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }]
+          })
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          console.error("Erro na API do Gemini:", errText);
+          return art; // Retorna a original se falhar
+        }
+
+        const data = await response.json();
+        const newText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+        if (!newText) {
+          console.error("Gemini não retornou texto.");
+          return art;
+        }
 
         return {
           ...art,
           content: newText,
           isRewritten: true,
         };
+
       } catch (geminiError) {
-        console.error("Erro no Gemini para esta notícia:", geminiError);
-        return art; // Se falhar, retorna a original
+        console.error("Erro no fetch do Gemini:", geminiError);
+        return art; // Retorna a original se falhar
       }
     }));
 
