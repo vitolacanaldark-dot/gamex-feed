@@ -1,4 +1,8 @@
-// api/news.js (Back-end da Vercel)
+// api/news.js
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
 const API_KEYS = [
   "81f4e37bbd147c199a3498c85ff7c572",
   "ce0b57eb8b3c6cf8d6549d098bee7e2c",
@@ -6,10 +10,8 @@ const API_KEYS = [
 ];
 
 export default async function handler(req, res) {
-  // Permite que o seu site acesse essa API
-  res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
 
   if (req.method === 'OPTIONS') {
     res.status(200).end();
@@ -19,11 +21,10 @@ export default async function handler(req, res) {
   const query = 'games OR videogame OR esports OR PlayStation OR Xbox OR Nintendo';
   let fetchedArticles = null;
 
-  // ROTAÇÃO DAS CHAVES
+  // 1. BUSCAR NOTÍCIAS NO GNEWS
   for (const key of API_KEYS) {
     try {
-      const gnewsUrl = `https://gnews.io/api/v4/search?q=${encodeURIComponent(query)}&lang=pt&sortby=publishedAt&max=10&apikey=${key}`;
-      
+      const gnewsUrl = `https://gnews.io/api/v4/search?q=${encodeURIComponent(query)}&lang=pt&sortby=publishedAt&max=5&apikey=${key}`;
       const apiResponse = await fetch(gnewsUrl);
       
       if (apiResponse.ok) {
@@ -38,9 +39,49 @@ export default async function handler(req, res) {
     }
   }
 
-  if (fetchedArticles) {
+  if (!fetchedArticles) {
+    return res.status(500).json({ success: false, message: "Nenhuma API key do GNews funcionou." });
+  }
+
+  // 2. REESCREVER COM O GEMINI (A MÁGICA)
+  try {
+    // Usamos o modelo Flash, que é rápido e gratuito no tier básico
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    const rewrittenArticles = await Promise.all(fetchedArticles.map(async (art) => {
+      
+      const prompt = `
+        Você é um jornalista profissional do portal de games "GAMEx FEED".
+        Sua tarefa é reescrever a notícia abaixo de forma 100% original, com as suas próprias palavras, mantendo todos os fatos reais.
+        O texto deve ser em português do Brasil, empolgante, voltado para gamers, e ter entre 3 a 5 parágrafos.
+        Não use o nome do veículo original. Comece o texto direto com a informação.
+        Não inclua links no texto.
+
+        Título original: ${art.title}
+        Resumo original: ${art.description}
+        Conteúdo original: ${art.content || ''}
+      `;
+
+      try {
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const newText = response.text();
+
+        return {
+          ...art,
+          content: newText,
+          isRewritten: true,
+        };
+      } catch (geminiError) {
+        console.error("Erro no Gemini para esta notícia:", geminiError);
+        return art; // Se falhar, retorna a original
+      }
+    }));
+
+    res.status(200).json({ success: true, articles: rewrittenArticles });
+
+  } catch (error) {
+    console.error("Erro geral no Gemini:", error);
     res.status(200).json({ success: true, articles: fetchedArticles });
-  } else {
-    res.status(500).json({ success: false, message: "Nenhuma API key funcionou ou limite atingido." });
   }
 }

@@ -14,21 +14,31 @@ const GAMEX_AUTHOR = {
 const CACHE_TIME_MS = 5 * 60 * 1000; // 5 minutos
 
 const formatGNews = (articles: any[]) => {
-  return articles.map((art: any, index: number) => ({
-    id: `gnews-${Date.now()}-${index}`,
-    title: art.title,
-    slug: art.url,
-    excerpt: art.description,
-    content: art.content || art.description, 
-    coverImage: art.image || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&auto=format&fit=crop&q=80',
-    category: 'Notícias', 
-    tags: ['Games', 'GAMEx FEED'],
-    author: GAMEX_AUTHOR,
-    readTime: '3 min',
-    publishedAt: art.publishedAt || new Date().toISOString(),
-    views: 0,
-    likes: 0,
-  }));
+  return articles.map((art: any, index: number) => {
+    // Verifica se a notícia foi reescrita pela IA
+    const isRewritten = art.isRewritten || false;
+    
+    // Limpa o texto "[1936 chars]" caso a notícia não tenha sido reescrita
+    const rawContent = art.content || art.description || '';
+    const cleanContent = rawContent.replace(/\[\+\d+\s+chars\]/gi, '').replace(/\[\d+\s+chars\]/gi, '').trim();
+
+    return {
+      id: `gnews-${Date.now()}-${index}`,
+      title: art.title,
+      // Se foi reescrita, o link é interno (para não abrir a fonte). Se não, é o link original.
+      slug: isRewritten ? `noticia-${Date.now()}-${index}` : art.url, 
+      excerpt: art.description,
+      content: cleanContent, 
+      coverImage: art.image || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&auto=format&fit=crop&q=80',
+      category: 'Notícias', 
+      tags: ['Games', 'GAMEx FEED'],
+      author: GAMEX_AUTHOR,
+      readTime: '3 min',
+      publishedAt: art.publishedAt || new Date().toISOString(),
+      views: 0,
+      likes: 0,
+    };
+  });
 };
 
 export const fetchRealNews = async (force: boolean = false) => {
@@ -45,8 +55,6 @@ export const fetchRealNews = async (force: boolean = false) => {
   let fetchedNews: any[] = [];
 
   try {
-    // No localhost, a Vercel não roda a pasta api. 
-    // Mas quando você fizer o deploy, ela vai funcionar perfeitamente.
     const apiUrl = "/api/news"; 
     
     const response = await fetch(apiUrl);
