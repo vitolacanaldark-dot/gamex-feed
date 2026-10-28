@@ -24,7 +24,6 @@ export default async function handler(req, res) {
   const query = 'games OR videogame OR esports OR PlayStation OR Xbox OR Nintendo';
   let fetchedArticles = null;
 
-  // 1. BUSCAR NOTÍCIAS NO GNEWS
   for (const key of API_KEYS_GNEWS) {
     try {
       const gnewsUrl = `https://gnews.io/api/v4/search?q=${encodeURIComponent(query)}&lang=pt&sortby=publishedAt&max=5&apikey=${key}`;
@@ -46,7 +45,6 @@ export default async function handler(req, res) {
     return res.status(500).json({ success: false, message: "Nenhuma API key do GNews funcionou." });
   }
 
-  // 2. REESCREVER A NOTÍCIA COM ROTAÇÃO DE CHAVES DO GROQ
   try {
     const mainArticle = fetchedArticles[0];
     const otherArticles = fetchedArticles.slice(1);
@@ -77,8 +75,8 @@ export default async function handler(req, res) {
             'Authorization': `Bearer ${groqKey}`
           },
           body: JSON.stringify({
-            // 👇 O MODELO FOI ATUALIZADO AQUI
-            model: "llama-3.1-8b-instant", 
+            // 👇 MODELO ATUAL DA GROQ
+            model: "llama-3.3-70b-versatile", 
             messages: [
               { role: "system", content: "Você é um jornalista de games focado em notícias reais e textos autorais." },
               { role: "user", content: prompt }
@@ -98,10 +96,11 @@ export default async function handler(req, res) {
               content: newText,
               isRewritten: true,
             };
-            break; // Para o loop se der certo
+            break; 
           }
         } else {
-           console.warn(`⚠️ Chave Groq ...${groqKey.slice(-4)} falhou. Tentando próxima...`);
+           const errText = await response.text();
+           console.warn(`⚠️ Chave Groq ...${groqKey.slice(-4)} falhou: ${errText}`);
         }
       } catch (error) {
         console.error("Erro no fetch do Groq:", error);
