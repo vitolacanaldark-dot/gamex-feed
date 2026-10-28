@@ -1,11 +1,17 @@
 // api/news.js
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
-
-const API_KEYS = [
+const API_KEYS_GNEWS = [
   "81f4e37bbd147c199a3498c85ff7c572",
   "ce0b57eb8b3c6cf8d6549d098bee7e2c",
   "2b42036f62c14806b415a240b15b999f"
 ];
+
+// Pega automaticamente todas as chaves do Groq do .env
+const getGroqKeys = () => {
+  return Object.keys(process.env)
+    .filter(key => key.startsWith('GROQ_API_KEY'))
+    .map(key => process.env[key])
+    .filter(Boolean);
+};
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -19,8 +25,8 @@ export default async function handler(req, res) {
   const query = 'games OR videogame OR esports OR PlayStation OR Xbox OR Nintendo';
   let fetchedArticles = null;
 
-  // 1. BUSCAR NOTÍCIAS NO GNEWS
-  for (const key of API_KEYS) {
+  // 1. BUSCAR NOTÍCIAS NO GNEWS (Com rotação de chaves)
+  for (const key of API_KEYS_GNEWS) {
     try {
       const gnewsUrl = `https://gnews.io/api/v4/search?q=${encodeURIComponent(query)}&lang=pt&sortby=publishedAt&max=5&apikey=${key}`;
       const apiResponse = await fetch(gnewsUrl);
@@ -33,7 +39,7 @@ export default async function handler(req, res) {
         }
       }
     } catch (error) {
-      console.error(`Erro com a chave ...${key.slice(-4)}`);
+      console.error(`Erro com a chave GNews ...${key.slice(-4)}`);
     }
   }
 
@@ -41,7 +47,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ success: false, message: "Nenhuma API key do GNews funcionou." });
   }
 
-  // 2. REESCREVER A PRIMEIRA NOTÍCIA USANDO GROQ (Llama 3)
+  // 2. REESCREVER A PRIMEIRA NOTÍCIA USANDO GROQ (Com rotação de chaves)
   try {
     const mainArticle = fetchedArticles[0];
     const otherArticles = fetchedArticles.slice(1);
@@ -59,43 +65,48 @@ export default async function handler(req, res) {
     `;
 
     let rewrittenMainArticle = mainArticle;
+    const groqKeys = getGroqKeys();
 
-    try {
-      const groqUrl = `https://api.groq.com/openai/v1/chat/completions`;
-      
-      const response = await fetch(groqUrl, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${GROQ_API_KEY}` // Autenticação do Groq
-        },
-        body: JSON.stringify({
-          model: "llama3-8b-8192", // Modelo gratuito e rápido
-          messages: [
-            { role: "system", content: "Você é um jornalista de games focado em notícias reais e textos autorais." },
-            { role: "user", content: prompt }
-          ],
-          temperature: 0.7,
-        })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const newText = data.choices?.[0]?.message?.content;
+    // LOOP DE ROTAÇÃO DAS CHAVES DO GROQ
+    for (const groqKey of groqKeys) {
+      try {
+        const groqUrl = `https://api.groq.com/openai/v1/chat/completions`;
         
-        if (newText) {
-          rewrittenMainArticle = {
-            ...mainArticle,
-            content: newText,
-            isRewritten: true,
-          };
+        const response = await fetch(groqUrl, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${groqKey}`
+          },
+          body: JSON.stringify({
+            model: "llama3-8b-8192",
+            messages: [
+              { role: "system", content: "Você é um jornalista de games focado em notícias reais e textos autorais." },
+              { role: "user", content: prompt }
+            ],
+            temperature: 0.7,
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const newText = data.choices?.[0]?.message?.content;
+          
+          if (newText) {
+            console.log(`✅ Notícia reescrita com sucesso usando a chave Groq ...${groqKey.slice(-4)}`);
+            rewrittenMainArticle = {
+              ...mainArticle,
+              content: newText,
+              isRewritten: true,
+            };
+            break; // Se funcionou, para o loop e não tenta as próximas chaves
+          }
+        } else {
+           console.warn(`⚠️ Chave Groq ...${groqKey.slice(-4)} falhou. Tentando próxima...`);
         }
-      } else {
-         const errText = await response.text();
-         console.error("Erro na API do Groq:", errText);
+      } catch (error) {
+        console.error("Erro no fetch do Groq:", error);
       }
-    } catch (error) {
-      console.error("Erro no fetch do Groq:", error);
     }
 
     const finalArticles = [rewrittenMainArticle, ...otherArticles];
