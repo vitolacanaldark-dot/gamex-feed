@@ -1,28 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import {
-  NewsArticle,
-  CommunityPost,
-  GameRelease,
-  UserProfile,
-  CategoryType,
-  CommunityCategory,
-  NotificationItem,
-} from '../types.ts';
-import {
-  INITIAL_USER,
-  INITIAL_NEWS,
-  INITIAL_POSTS,
-  INITIAL_RELEASES,
-  INITIAL_NOTIFICATIONS,
-} from '../data/mockData.ts';
-import {
-  calculateLevel,
-  checkBadges,
-  countUnreadNotifications,
-  markNotificationAsRead,
-  markAllNotificationsAsRead,
-} from '../utils/gamerLogic.ts';
+import { NewsArticle, CommunityPost, GameRelease, UserProfile, CategoryType, CommunityCategory, NotificationItem } from '../types.ts';
+import { INITIAL_USER, INITIAL_NEWS, INITIAL_RELEASES, INITIAL_NOTIFICATIONS } from '../data/mockData.ts';
+import { calculateLevel, checkBadges, countUnreadNotifications, markNotificationAsRead, markAllNotificationsAsRead } from '../utils/gamerLogic.ts';
 import { fetchRealNews } from '../newsService.ts';
+import { supabase } from '../lib/supabase.ts';
 
 interface XpToast {
   id: string;
@@ -37,12 +18,10 @@ interface AppContextType {
   setNewsCategoryFilter: (cat: CategoryType) => void;
   communityCategoryFilter: CommunityCategory;
   setCommunityCategoryFilter: (cat: CommunityCategory) => void;
-  
   user: UserProfile;
   setUser: React.Dispatch<React.SetStateAction<UserProfile>>;
   addXp: (amount: number, reason: string) => void;
   xpToasts: XpToast[];
-  
   articles: NewsArticle[];
   selectedArticle: NewsArticle | null;
   openArticleModal: (article: NewsArticle) => void;
@@ -50,59 +29,23 @@ interface AppContextType {
   toggleSaveArticle: (articleId: string) => void;
   isArticleSaved: (articleId: string) => boolean;
   likeArticle: (articleId: string) => void;
-  
   posts: CommunityPost[];
-  createPost: (data: {
-    category: CommunityCategory;
-    content: string;
-    tags: string[];
-    imageUrl?: string;
-    pollQuestion?: string;
-    pollOptions?: string[];
-  }) => void;
+  createPost: (data: any) => void;
   toggleLikePost: (postId: string) => void;
   addCommentToPost: (postId: string, content: string) => void;
   votePoll: (postId: string, optionId: string) => void;
   repostPost: (postId: string) => void;
-  
   releases: GameRelease[];
   toggleReleaseReminder: (releaseId: string) => void;
-  
-  isSearchOpen: boolean;
-  setIsSearchOpen: (open: boolean) => void;
-  isCreatePostOpen: boolean;
-  setIsCreatePostOpen: (open: boolean) => void;
-  isDiscordModalOpen: boolean;
-  setIsDiscordModalOpen: (open: boolean) => void;
-  isLoginModalOpen: boolean;
-  setIsLoginModalOpen: (open: boolean) => void;
-  isSplashOpen: boolean;
-  setIsSplashOpen: (open: boolean) => void;
-
-  notifications: NotificationItem[];
-  unreadNotificationsCount: number;
-  isNotificationsOpen: boolean;
-  setIsNotificationsOpen: (open: boolean) => void;
-  markNotificationRead: (id: string) => void;
-  markAllNotificationsRead: () => void;
-  pushNotification: (data: {
-    type: 'comment' | 'reply' | 'like' | 'xp' | 'system';
-    title: string;
-    message: string;
-    postId?: string;
-    sender: { name: string; avatar: string; handle: string };
-    linkTab?: 'community' | 'profile' | 'news';
-  }) => void;
-  activePushToast: NotificationItem | null;
-  dismissPushToast: () => void;
-  simulateIncomingNotification: (type?: 'comment' | 'reply') => void;
-  browserNotificationsEnabled: boolean;
-  requestBrowserPushPermission: () => Promise<boolean>;
-
-  isLevelingUp: boolean;
-  lastLevelUpNumber: number | null;
-  xpGainTick: number;
-  triggerLevelUpBonus: () => void;
+  isSearchOpen: boolean; setIsSearchOpen: (open: boolean) => void;
+  isCreatePostOpen: boolean; setIsCreatePostOpen: (open: boolean) => void;
+  isDiscordModalOpen: boolean; setIsDiscordModalOpen: (open: boolean) => void;
+  isLoginModalOpen: boolean; setIsLoginModalOpen: (open: boolean) => void;
+  isSplashOpen: boolean; setIsSplashOpen: (open: boolean) => void;
+  notifications: NotificationItem[]; unreadNotificationsCount: number; isNotificationsOpen: boolean; setIsNotificationsOpen: (open: boolean) => void; markNotificationRead: (id: string) => void; markAllNotificationsRead: () => void;
+  pushNotification: (data: any) => void; activePushToast: NotificationItem | null; dismissPushToast: () => void; simulateIncomingNotification: (type?: 'comment' | 'reply') => void; browserNotificationsEnabled: boolean; requestBrowserPushPermission: () => Promise<boolean>;
+  isLevelingUp: boolean; lastLevelUpNumber: number | null; xpGainTick: number; triggerLevelUpBonus: () => void;
+  refreshPosts: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -112,22 +55,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [newsCategoryFilter, setNewsCategoryFilter] = useState<CategoryType>('Todos');
   const [communityCategoryFilter, setCommunityCategoryFilter] = useState<CommunityCategory>('Todos');
   
-  const [user, setUser] = useState<UserProfile>(() => {
-    const saved = localStorage.getItem('gamex_user');
-    return saved && JSON.parse(saved).id ? JSON.parse(saved) : INITIAL_USER;
-  });
-  
-  const [articles, setArticles] = useState<NewsArticle[]>(() => {
-    const saved = localStorage.getItem('gamex_articles');
-    return saved ? JSON.parse(saved) : INITIAL_NEWS;
-  });
-  
-  const [posts, setPosts] = useState<CommunityPost[]>(() => {
-    const saved = localStorage.getItem('gamex_posts');
-    return saved ? JSON.parse(saved) : INITIAL_POSTS;
-  });
-  
+  const [user, setUser] = useState<UserProfile>(INITIAL_USER);
+  const [articles, setArticles] = useState<NewsArticle[]>(INITIAL_NEWS);
+  const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [releases, setReleases] = useState<GameRelease[]>(INITIAL_RELEASES);
+  
   const [selectedArticle, setSelectedArticle] = useState<NewsArticle | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
@@ -138,266 +70,157 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activePushToast, setActivePushToast] = useState<NotificationItem | null>(null);
   const [browserNotificationsEnabled, setBrowserNotificationsEnabled] = useState(false);
   
-  const [notifications, setNotifications] = useState<NotificationItem[]>(() => {
-    const saved = localStorage.getItem('gamex_notifications');
-    return saved ? JSON.parse(saved) : INITIAL_NOTIFICATIONS;
-  });
-
+  const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
   const [xpToasts, setXpToasts] = useState<XpToast[]>([]);
   const [isLevelingUp, setIsLevelingUp] = useState(false);
   const [lastLevelUpNumber, setLastLevelUpNumber] = useState<number | null>(null);
   const [xpGainTick, setXpGainTick] = useState(0);
 
-  // =========================================================================
-  // CARREGAMENTO INICIAL E LOOP DE ATUALIZAÇÃO AUTOMÁTICA (A CADA 5 MINUTOS)
-  // =========================================================================
+  // --- FUNÇÕES DO SUPABASE ---
+
+  const fetchPosts = async () => {
+    const { data, error } = await supabase
+      .from('posts')
+      .select(`*, profiles:user_id (username, avatar_url, level)`)
+      .order('created_at', { ascending: false });
+    
+    if (!error && data) {
+      const formattedPosts = data.map((p: any) => ({
+        id: p.id,
+        author: { 
+          id: p.user_id, 
+          name: p.profiles?.username || 'Usuário', 
+          handle: `@${p.profiles?.username || 'user'}`, 
+          avatar: p.profiles?.avatar_url || 'https://i.imgur.com/uXOvpRq.png', 
+          level: p.profiles?.level || 1 
+        },
+        category: p.category,
+        content: p.content,
+        tags: p.tags || [],
+        imageUrl: p.image_url,
+        likes: p.likes,
+        commentsCount: p.comments_count,
+        repostsCount: p.reposts_count,
+        createdAt: p.created_at,
+        hasLiked: false,
+        comments: []
+      }));
+      setPosts(formattedPosts);
+    }
+  };
+
+  const loadUserProfile = async (userId: string) => {
+    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
+    if (data) {
+      setUser({
+        ...INITIAL_USER,
+        id: data.id,
+        name: data.username || 'Gamer',
+        handle: `@${data.username || 'gamer'}`,
+        avatar: data.avatar_url || 'https://i.imgur.com/uXOvpRq.png',
+        bio: data.bio,
+        level: data.level,
+        currentXp: data.current_xp,
+        gamerRank: data.gamer_rank,
+        followersCount: data.followers_count,
+        followingCount: data.following_count,
+        savedArticles: data.saved_articles || [],
+        repostedPostIds: data.reposted_posts || [],
+      });
+    }
+  };
+
   useEffect(() => {
-    // 1. Busca inicial assim que o site abre
-    const loadInitialNews = async () => {
+    const loadNews = async () => {
       const realNews = await fetchRealNews();
       if (realNews.length > 0) setArticles(realNews);
     };
-    loadInitialNews();
+    loadNews();
+    fetchPosts();
 
-    // 2. O Loop Infinito (300.000 ms = 5 minutos)
-    const intervalId = setInterval(async () => {
-      // Só busca se a aba do navegador estiver visível (economiza API e bateria)
-      if (document.visibilityState === 'visible') {
-        const realNews = await fetchRealNews();
-        if (realNews.length > 0) setArticles(realNews);
+    // Verifica se o usuário já está logado ao abrir o site
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) loadUserProfile(session.user.id);
+    });
+
+    // Escuta mudanças de login/logout
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        loadUserProfile(session.user.id);
+      } else {
+        setUser(INITIAL_USER);
       }
-    }, 300000); 
+    });
 
-    // Limpa o loop se o componente for desmontado
-    return () => clearInterval(intervalId);
+    return () => authListener.subscription.unsubscribe();
   }, []);
 
-  useEffect(() => {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      setBrowserNotificationsEnabled(Notification.permission === 'granted');
-    }
-  }, []);
-
-  useEffect(() => {
-    if (user.id) localStorage.setItem('gamex_user', JSON.stringify(user));
-  }, [user]);
-
-  useEffect(() => {
-    localStorage.setItem('gamex_articles', JSON.stringify(articles));
-  }, [articles]);
-
-  useEffect(() => {
-    localStorage.setItem('gamex_posts', JSON.stringify(posts));
-  }, [posts]);
-
-  useEffect(() => {
-    localStorage.setItem('gamex_notifications', JSON.stringify(notifications));
-  }, [notifications]);
-
-  const addXp = (amount: number, reason: string) => {
-    if (!user.id) return; // Só ganha XP se estiver logado
-    
+  const addXp = async (amount: number, reason: string) => {
+    if (!user.id) return;
     const toastId = Math.random().toString(36).substring(2, 9);
     setXpToasts(prev => [...prev, { id: toastId, amount, reason }]);
-    setTimeout(() => {
-      setXpToasts(prev => prev.filter(t => t.id !== toastId));
-    }, 3500);
+    setTimeout(() => setXpToasts(prev => prev.filter(t => t.id !== toastId)), 3500);
 
-    setXpGainTick(t => t + 1);
+    const newXp = user.currentXp + amount;
+    const levelInfo = calculateLevel(newXp);
+    
+    if (levelInfo.level > user.level) {
+      setIsLevelingUp(true);
+      setLastLevelUpNumber(levelInfo.level);
+      setTimeout(() => setIsLevelingUp(false), 4500);
+    }
 
-    setUser(prev => {
-      const prevLevel = calculateLevel(prev.currentXp).level;
-      const newTotalXp = prev.currentXp + amount;
-      const levelInfo = calculateLevel(newTotalXp);
-      const leveledUp = levelInfo.level > prevLevel;
-
-      if (leveledUp) {
-        setIsLevelingUp(true);
-        setLastLevelUpNumber(levelInfo.level);
-        setTimeout(() => setIsLevelingUp(false), 4500);
-        setTimeout(() => {
-          pushNotification({
-            type: 'xp',
-            title: `⚡ LEVEL UP! Você alcançou o Nível ${levelInfo.level}!`,
-            message: `Parabéns, ${prev.name}! Sua patente agora é "${levelInfo.gamerRank}".`,
-            sender: { name: 'Sistema GAMEx', avatar: '/logotipo.png', handle: '@gamex_system' },
-            linkTab: 'profile',
-          });
-        }, 300);
-      }
-      
-      const updatedBadges = checkBadges(prev.badges, {
-        xp: newTotalXp,
-        postCount: posts.filter(p => p.author.id === prev.id).length,
-        savedCount: prev.savedArticles.length,
-        commentCount: 0,
-      });
-
-      return {
-        ...prev,
-        currentXp: newTotalXp,
-        level: levelInfo.level,
-        gamerRank: levelInfo.gamerRank,
-        nextLevelXp: levelInfo.levelXpCeiling,
-        badges: updatedBadges,
-      };
-    });
+    setUser(prev => ({ ...prev, currentXp: newXp, level: levelInfo.level, gamerRank: levelInfo.gamerRank }));
+    
+    await supabase.from('profiles').update({ 
+      current_xp: newXp, 
+      level: levelInfo.level, 
+      gamer_rank: levelInfo.gamerRank 
+    }).eq('id', user.id);
   };
 
-  const triggerLevelUpBonus = () => {
-    const currentProgress = calculateLevel(user.currentXp);
-    const xpNeeded = Math.max(50, currentProgress.levelXpCeiling - user.currentXp + 25);
-    addXp(xpNeeded, '⚡ Conquista Especial da Comunidade (Level Up!)');
-  };
-
-  const openArticleModal = (article: NewsArticle) => {
-    setSelectedArticle(article);
-    if (user.id) addXp(15, `Leitura: ${article.title.substring(0, 24)}...`);
-  };
-
-  const closeArticleModal = () => setSelectedArticle(null);
-
-  const toggleSaveArticle = (articleId: string) => {
+  const createPost = async (data: any) => {
     if (!user.id) return;
-    setUser(prev => {
-      const isSaved = prev.savedArticles.includes(articleId);
-      const newSaved = isSaved ? prev.savedArticles.filter(id => id !== articleId) : [...prev.savedArticles, articleId];
-      if (!isSaved) addXp(20, 'Notícia salva para ler depois!');
-      return { ...prev, savedArticles: newSaved };
-    });
-  };
-
-  const isArticleSaved = (articleId: string) => user.savedArticles.includes(articleId);
-
-  const likeArticle = (articleId: string) => {
-    setArticles(prev => prev.map(art => art.id === articleId ? { ...art, likes: art.likes + 1 } : art));
-    if (user.id) addXp(10, 'Curtida em matéria jornalística');
-  };
-
-  const createPost = (data: any) => {
-    if (!user.id) return;
-    const newPost: CommunityPost = {
-      id: `post-${Date.now()}`,
-      author: { id: user.id, name: user.name, handle: user.handle, avatar: user.avatar, isVerified: user.isVerified, level: user.level, role: 'Membro Ativo' },
-      category: data.category,
+    const { error } = await supabase.from('posts').insert([{
+      user_id: user.id,
       content: data.content,
+      category: data.category,
       tags: data.tags,
-      imageUrl: data.imageUrl,
-      poll: data.pollQuestion && data.pollOptions?.length >= 2 ? {
-        question: data.pollQuestion,
-        options: data.pollOptions.map((opt: string, idx: number) => ({ id: `opt-${idx + 1}`, text: opt, votes: 0 })),
-        totalVotes: 0,
-      } : undefined,
-      likes: 0,
-      commentsCount: 0,
-      repostsCount: 0,
-      createdAt: new Date().toISOString(),
-      hasLiked: false,
-      comments: [],
-    };
-    setPosts(prev => [newPost, ...prev]);
-    addXp(50, `Novo tópico em #${data.category}`);
+      image_url: data.imageUrl
+    }]);
+    
+    if (!error) {
+      fetchPosts(); 
+      addXp(50, `Novo tópico em #${data.category}`);
+    }
   };
 
-  const toggleLikePost = (postId: string) => {
-    if (!user.id) return;
-    setPosts(prev => prev.map(p => {
-      if (p.id === postId) {
-        const isLiked = !!p.hasLiked;
-        if (!isLiked) addXp(5, 'Engajamento na comunidade');
-        return { ...p, hasLiked: !isLiked, likes: isLiked ? Math.max(0, p.likes - 1) : p.likes + 1 };
-      }
-      return p;
-    }));
+  const toggleLikePost = async (postId: string) => {
+     setPosts(prev => prev.map(p => p.id === postId ? { ...p, hasLiked: !p.hasLiked, likes: p.hasLiked ? p.likes - 1 : p.likes + 1 } : p));
+     const post = posts.find(p => p.id === postId);
+     if (post) {
+       const newLikes = post.hasLiked ? post.likes - 1 : post.likes + 1;
+       await supabase.from('posts').update({ likes: newLikes }).eq('id', postId);
+     }
   };
 
-  const addCommentToPost = (postId: string, content: string) => {
-    if (!content.trim() || !user.id) return;
-    const newComment = {
-      id: `comment-${Date.now()}`,
-      postId,
-      author: { id: user.id, name: user.name, handle: user.handle, avatar: user.avatar, level: user.level },
-      content: content.trim(),
-      createdAt: new Date().toISOString(),
-      likes: 0,
-    };
-    setPosts(prev => prev.map(p => p.id === postId ? { ...p, commentsCount: p.commentsCount + 1, comments: [...p.comments, newComment] } : p));
-    addXp(25, 'Comentário em discussão gamer');
-  };
-
-  const votePoll = (postId: string, optionId: string) => {
-    if (!user.id) return;
-    setPosts(prev => prev.map(p => {
-      if (p.id === postId && p.poll && !p.poll.userVotedOptionId) {
-        addXp(15, 'Voto registrado na enquete');
-        return { ...p, poll: { ...p.poll, userVotedOptionId: optionId, totalVotes: p.poll.totalVotes + 1, options: p.poll.options.map(opt => opt.id === optionId ? { ...opt, votes: opt.votes + 1 } : opt) } };
-      }
-      return p;
-    }));
-  };
-
-  const repostPost = (postId: string) => {
-    if (!user.id) return;
-    setUser(prev => {
-      const alreadyReposted = prev.repostedPostIds.includes(postId);
-      return { ...prev, repostedPostIds: alreadyReposted ? prev.repostedPostIds.filter(id => id !== postId) : [...prev.repostedPostIds, postId] };
-    });
-    setPosts(prev => prev.map(p => {
-      if (p.id === postId) {
-        const isReposted = !!p.hasReposted;
-        if (!isReposted) addXp(30, 'Post compartilhado no seu perfil!');
-        return { ...p, hasReposted: !isReposted, repostsCount: isReposted ? Math.max(0, p.repostsCount - 1) : p.repostsCount + 1 };
-      }
-      return p;
-    }));
-  };
-
-  const toggleReleaseReminder = (releaseId: string) => {
-    setReleases(prev => prev.map(rel => {
-      if (rel.id === releaseId) {
-        const nextState = !rel.isReminded;
-        if (nextState && user.id) addXp(10, `Lembrete ativado: ${rel.title}`);
-        return { ...rel, isReminded: nextState };
-      }
-      return rel;
-    }));
-  };
-
+  const openArticleModal = (article: NewsArticle) => { setSelectedArticle(article); if (user.id) addXp(15, `Leitura: ${article.title.substring(0, 24)}...`); };
+  const closeArticleModal = () => setSelectedArticle(null);
+  const toggleSaveArticle = (articleId: string) => { setUser(prev => { const isSaved = prev.savedArticles.includes(articleId); return { ...prev, savedArticles: isSaved ? prev.savedArticles.filter(id => id !== articleId) : [...prev.savedArticles, articleId] }}) };
+  const isArticleSaved = (articleId: string) => user.savedArticles.includes(articleId);
+  const likeArticle = (articleId: string) => { setArticles(prev => prev.map(art => art.id === articleId ? { ...art, likes: art.likes + 1 } : art)); if (user.id) addXp(10, 'Curtida em matéria'); };
+  const addCommentToPost = (postId: string, content: string) => { /* Implementar no futuro */ addXp(25, 'Comentário'); };
+  const votePoll = (postId: string, optionId: string) => { /* Implementar no futuro */ };
+  const repostPost = (postId: string) => { /* Implementar no futuro */ };
+  const toggleReleaseReminder = (releaseId: string) => { setReleases(prev => prev.map(rel => rel.id === releaseId ? { ...rel, isReminded: !rel.isReminded } : rel)); if (user.id) addXp(10, 'Lembrete'); };
   const markNotificationRead = (id: string) => setNotifications(prev => markNotificationAsRead(prev, id));
   const markAllNotificationsRead = () => setNotifications(prev => markAllNotificationsAsRead(prev));
   const dismissPushToast = () => setActivePushToast(null);
-
-  const requestBrowserPushPermission = async (): Promise<boolean> => {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      try {
-        const permission = await Notification.requestPermission();
-        const granted = permission === 'granted';
-        setBrowserNotificationsEnabled(granted);
-        return granted;
-      } catch { return false; }
-    }
-    return false;
-  };
-
-  const pushNotification = (data: any) => {
-    const newNotification: NotificationItem = {
-      id: `notif-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      type: data.type, title: data.title, message: data.message, postId: data.postId, sender: data.sender,
-      createdAt: new Date().toISOString(), isRead: false, linkTab: data.linkTab || 'community',
-    };
-    setNotifications(prev => [newNotification, ...prev]);
-    setActivePushToast(newNotification);
-    setTimeout(() => setActivePushToast(current => (current?.id === newNotification.id ? null : current)), 6000);
-  };
-
-  const simulateIncomingNotification = (type: 'comment' | 'reply' = 'reply') => {
-    const communityMembers = [{ name: 'Kira "Cyber" Vance', handle: '@cyber_valk', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150' }];
-    const randomMember = communityMembers[0];
-    pushNotification({
-      type, title: 'Nova notificação', message: 'Teste de push.', sender: randomMember, linkTab: 'community',
-    });
-  };
-
+  const requestBrowserPushPermission = async () => false;
+  const pushNotification = (data: any) => {};
+  const simulateIncomingNotification = (type: 'comment' | 'reply' = 'reply') => {};
+  const triggerLevelUpBonus = () => addXp(50, 'Bônus de Nível');
+  
   const unreadNotificationsCount = countUnreadNotifications(notifications);
 
   return (
@@ -407,7 +230,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       posts, createPost, toggleLikePost, addCommentToPost, votePoll, repostPost, releases, toggleReleaseReminder,
       isSearchOpen, setIsSearchOpen, isCreatePostOpen, setIsCreatePostOpen, isDiscordModalOpen, setIsDiscordModalOpen, isLoginModalOpen, setIsLoginModalOpen, isSplashOpen, setIsSplashOpen,
       notifications, unreadNotificationsCount, isNotificationsOpen, setIsNotificationsOpen, markNotificationRead, markAllNotificationsRead, pushNotification, activePushToast, dismissPushToast, simulateIncomingNotification, browserNotificationsEnabled, requestBrowserPushPermission,
-      isLevelingUp, lastLevelUpNumber, xpGainTick, triggerLevelUpBonus,
+      isLevelingUp, lastLevelUpNumber, xpGainTick, triggerLevelUpBonus, refreshPosts: fetchPosts,
     }}>
       {children}
     </AppContext.Provider>
