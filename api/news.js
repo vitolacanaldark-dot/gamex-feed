@@ -1,5 +1,5 @@
 // api/news.js
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 const API_KEYS = [
   "81f4e37bbd147c199a3498c85ff7c572",
@@ -41,7 +41,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ success: false, message: "Nenhuma API key do GNews funcionou." });
   }
 
-  // 2. REESCREVER APENAS A PRIMEIRA NOTÍCIA COM O GEMINI (Economia de Cota)
+  // 2. REESCREVER A PRIMEIRA NOTÍCIA USANDO GROQ (Llama 3)
   try {
     const mainArticle = fetchedArticles[0];
     const otherArticles = fetchedArticles.slice(1);
@@ -61,23 +61,27 @@ export default async function handler(req, res) {
     let rewrittenMainArticle = mainArticle;
 
     try {
-      // USANDO O MODELO CORRETO: gemini-1.5-flash
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`;
+      const groqUrl = `https://api.groq.com/openai/v1/chat/completions`;
       
-      const response = await fetch(geminiUrl, {
+      const response = await fetch(groqUrl, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'X-goog-api-key': GEMINI_API_KEY
+          'Authorization': `Bearer ${GROQ_API_KEY}` // Autenticação do Groq
         },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }]
+          model: "llama3-8b-8192", // Modelo gratuito e rápido
+          messages: [
+            { role: "system", content: "Você é um jornalista de games focado em notícias reais e textos autorais." },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.7,
         })
       });
 
       if (response.ok) {
         const data = await response.json();
-        const newText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        const newText = data.choices?.[0]?.message?.content;
         
         if (newText) {
           rewrittenMainArticle = {
@@ -88,15 +92,13 @@ export default async function handler(req, res) {
         }
       } else {
          const errText = await response.text();
-         console.error("Erro na API do Gemini (Notícia Principal):", errText);
+         console.error("Erro na API do Groq:", errText);
       }
     } catch (error) {
-      console.error("Erro no fetch do Gemini:", error);
+      console.error("Erro no fetch do Groq:", error);
     }
 
-    // Junta a notícia principal reescrita com as outras 4 originais
     const finalArticles = [rewrittenMainArticle, ...otherArticles];
-
     res.status(200).json({ success: true, articles: finalArticles });
 
   } catch (error) {
