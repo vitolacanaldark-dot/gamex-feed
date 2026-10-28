@@ -5,11 +5,7 @@ import { calculateLevel, checkBadges, countUnreadNotifications, markNotification
 import { fetchRealNews } from '../newsService.ts';
 import { supabase } from '../lib/supabase.ts';
 
-interface XpToast {
-  id: string;
-  amount: number;
-  reason: string;
-}
+interface XpToast { id: string; amount: number; reason: string; }
 
 interface AppContextType {
   activeTab: 'home' | 'news' | 'community' | 'calendar' | 'profile';
@@ -103,9 +99,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         repostsCount: p.reposts_count,
         createdAt: p.created_at,
         hasLiked: false,
+        isPinned: p.is_pinned || false, // Garantindo que o fixado seja lido
         comments: []
       }));
       setPosts(formattedPosts);
+    }
+  };
+
+  const createWelcomePost = async () => {
+    // Verifica se o post de boas-vindas já existe
+    const { data } = await supabase.from('posts').select('id').eq('is_pinned', true).limit(1);
+    
+    if (!data || data.length === 0) {
+      // Cria o post usando o ID do admin (o user.id será substituído pelo Admin)
+      // Como não temos um ID de Auth para o admin, usamos um texto genérico ou criamos um "sistema"
+      // No Supabase, precisamos de um user_id válido. Vamos usar o primeiro admin que encontrar.
+      const { data: adminProfile } = await supabase.from('profiles').select('id').limit(1).single();
+      
+      if (adminProfile) {
+        await supabase.from('posts').insert([{
+          user_id: adminProfile.id,
+          content: `Bem-vindo à Comunidade GAMEx FEED! 🎮\n\nEste é o seu espaço para compartilhar notícias, tirar dúvidas, criar enquetes, encontrar esquadrões (LFG) e muito mais. \n\nPara começar a interagir e ganhar XP, crie sua conta agora mesmo!`,
+          category: 'Notícia',
+          is_pinned: true,
+          likes: 0,
+          comments_count: 0,
+          reposts_count: 0
+        }]);
+        // Recarrega os posts para mostrar o novo
+        fetchPosts();
+      }
     }
   };
 
@@ -136,14 +159,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (realNews.length > 0) setArticles(realNews);
     };
     loadNews();
-    fetchPosts();
+    
+    // Carrega os posts e verifica se precisa criar o post fixado
+    const initCommunity = async () => {
+      await fetchPosts();
+      await createWelcomePost();
+    };
+    initCommunity();
 
-    // Verifica se o usuário já está logado ao abrir o site
+    // Verifica se o usuário já está logado
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) loadUserProfile(session.user.id);
     });
 
-    // Escuta mudanças de login/logout
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         loadUserProfile(session.user.id);
@@ -209,9 +237,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const toggleSaveArticle = (articleId: string) => { setUser(prev => { const isSaved = prev.savedArticles.includes(articleId); return { ...prev, savedArticles: isSaved ? prev.savedArticles.filter(id => id !== articleId) : [...prev.savedArticles, articleId] }}) };
   const isArticleSaved = (articleId: string) => user.savedArticles.includes(articleId);
   const likeArticle = (articleId: string) => { setArticles(prev => prev.map(art => art.id === articleId ? { ...art, likes: art.likes + 1 } : art)); if (user.id) addXp(10, 'Curtida em matéria'); };
-  const addCommentToPost = (postId: string, content: string) => { /* Implementar no futuro */ addXp(25, 'Comentário'); };
-  const votePoll = (postId: string, optionId: string) => { /* Implementar no futuro */ };
-  const repostPost = (postId: string) => { /* Implementar no futuro */ };
+  const addCommentToPost = (postId: string, content: string) => { addXp(25, 'Comentário'); };
+  const votePoll = (postId: string, optionId: string) => { };
+  const repostPost = (postId: string) => { };
   const toggleReleaseReminder = (releaseId: string) => { setReleases(prev => prev.map(rel => rel.id === releaseId ? { ...rel, isReminded: !rel.isReminded } : rel)); if (user.id) addXp(10, 'Lembrete'); };
   const markNotificationRead = (id: string) => setNotifications(prev => markNotificationAsRead(prev, id));
   const markAllNotificationsRead = () => setNotifications(prev => markAllNotificationsAsRead(prev));
