@@ -1,0 +1,8 @@
+{
+  "name": "GAMEx FEED - Portal Gamer & Comunidade Esports",
+  "description": "O portal definitivo de notícias gamer em tempo real e rede social cyber-esports. Fique por dentro dos lançamentos, leia matérias exclusivas e interaja na comunidade.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

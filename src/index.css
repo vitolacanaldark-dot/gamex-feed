@@ -1,0 +1,89 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #0A0A0E;
+    color: #F3F4F6;
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, h4, .font-orbitron {
+    font-family: 'Orbitron', -apple-system, sans-serif;
+    letter-spacing: -0.02em;
+  }
+}
+
+/* Neon glow utilities */
+.neon-glow-green {
+  box-shadow: 0 0 15px rgba(57, 255, 20, 0.4), 0 0 30px rgba(57, 255, 20, 0.15);
+}
+
+.neon-glow-cyan {
+  box-shadow: 0 0 15px rgba(0, 255, 255, 0.4), 0 0 30px rgba(0, 255, 255, 0.15);
+}
+
+.neon-border-green {
+  border-color: #39FF14;
+  box-shadow: 0 0 12px rgba(57, 255, 20, 0.35);
+}
+
+.neon-border-cyan {
+  border-color: #00FFFF;
+  box-shadow: 0 0 12px rgba(0, 255, 255, 0.35);
+}
+
+.neon-text-green {
+  color: #39FF14;
+  text-shadow: 0 0 10px rgba(57, 255, 20, 0.65);
+}
+
+.neon-text-cyan {
+  color: #00FFFF;
+  text-shadow: 0 0 10px rgba(0, 255, 255, 0.65);
+}
+
+/* Glassmorphism */
+.glass-panel {
+  background: rgba(16, 17, 24, 0.75);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-panel-hover {
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.glass-panel-hover:hover {
+  background: rgba(22, 24, 34, 0.88);
+  border-color: rgba(57, 255, 20, 0.45);
+  box-shadow: 0 6px 24px -2px rgba(57, 255, 20, 0.15);
+}
+
+/* Cyber grid pattern */
+.cyber-grid-bg {
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 36px 36px;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #0d0d12;
+}
+::-webkit-scrollbar-thumb {
+  background: #252836;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #39FF14;
+}
