@@ -5,7 +5,7 @@ import { Bookmark, Clock, Flame, ChevronRight } from 'lucide-react';
 export const HeroSection: React.FC = () => {
   const { articles, openArticleModal, toggleSaveArticle, isArticleSaved } = useApp();
 
-  // Pega a notícia mais recente (que está na posição 0 do array ordenado)
+  // Pega a notícia mais recente (já ordenada pela data no Contexto)
   const mainArticle = articles[0];
 
   if (!mainArticle) return null;

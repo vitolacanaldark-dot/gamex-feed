@@ -41,22 +41,22 @@ export const fetchRealNews = async (force: boolean = false) => {
   const now = Date.now();
   const timeSinceLastFetch = lastFetch ? now - parseInt(lastFetch) : Infinity;
 
+  // Se não for forçado e o cache for recente (menos de 5 min), retorna o cache
   if (!force && cachedNewsString && timeSinceLastFetch < CACHE_TIME_MS) {
     return JSON.parse(cachedNewsString);
   }
 
-  console.log("🔄 Buscando notícias via API Route (Vercel)...");
+  console.log("🔄 Buscando novas notícias para atualizar o histórico...");
   let fetchedNews: any[] = [];
 
   try {
-    const apiUrl = `/api/news?t=${Date.now()}`; // O '?t=' evita cache da Vercel
-    
+    const apiUrl = `/api/news?t=${Date.now()}`; // Evita cache da Vercel
     const response = await fetch(apiUrl);
     
     if (response.ok) {
       const data = await response.json();
       if (data.success && data.articles) {
-        console.log(`✅ Sucesso! ${data.articles.length} notícias carregadas via Back-end.`);
+        console.log(`✅ ${data.articles.length} notícias novas carregadas.`);
         fetchedNews = formatGNews(data.articles);
       }
     } else {
@@ -66,9 +66,24 @@ export const fetchRealNews = async (force: boolean = false) => {
     console.warn(`⚠️ Erro ao chamar a API Route.`);
   }
 
-  // Se a API falhar, o array fica vazio. O site mostra a mensagem de "sem notícias".
-  const sortedNews = fetchedNews.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+  // JUNTA NOTÍCIAS NOVAS COM O HISTÓRICO DO CACHE
+  const existingNews = cachedNewsString ? JSON.parse(cachedNewsString) : [];
+  const allNews = [...fetchedNews, ...existingNews];
+  
+  // Remove duplicatas (pelo título)
+  const uniqueNewsMap = new Map();
+  allNews.forEach(news => {
+    if (!uniqueNewsMap.has(news.title)) {
+      uniqueNewsMap.set(news.title, news);
+    }
+  });
 
+  // Ordena da mais recente para a mais antiga e mantém o histórico de 50 notícias
+  const sortedNews = Array.from(uniqueNewsMap.values())
+    .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
+    .slice(0, 50);
+
+  // SALVA NO CACHE
   localStorage.setItem('gamex_news_cache', JSON.stringify(sortedNews));
   localStorage.setItem('gamex_news_last_fetch', now.toString());
 

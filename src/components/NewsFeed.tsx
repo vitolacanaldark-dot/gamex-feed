@@ -21,9 +21,11 @@ export const NewsFeed: React.FC<NewsFeedProps> = ({ isHomeScreen = false }) => {
     ? articles 
     : articles.filter((a) => a.category === newsCategoryFilter);
 
+  // NA HOME: Pula a notícia principal (Hero) e pega as 4 mais recentes
   if (isHomeScreen) {
-    filtered = filtered.slice(1, 5); // Ignora a principal (Hero) e pega 4
+    filtered = filtered.slice(1, 5);
   }
+  // NA ABA NOTÍCIAS: Mostra todo o histórico (até 50) 
 
   return (
     <section className="space-y-6" aria-label="Portal de Notícias Gamer">
@@ -47,12 +49,11 @@ export const NewsFeed: React.FC<NewsFeedProps> = ({ isHomeScreen = false }) => {
         ))}
       </div>
 
-      {/* AVISO DE SEM NOTÍCIAS */}
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 bg-white/[0.02] border border-white/10 rounded-2xl">
           <SearchX className="w-12 h-12 text-gray-500 mb-4" />
           <h3 className="text-lg font-bold text-white mb-2">Nenhuma notícia encontrada</h3>
-          <p className="text-sm text-gray-400 text-center max-w-md">Nossas APIs podem estar temporariamente indisponíveis ou não há novas notícias nesta categoria. Tente novamente mais tarde.</p>
+          <p className="text-sm text-gray-400 text-center max-w-md">Nossas APIs podem estar temporariamente indisponíveis ou não há notícias nesta categoria.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
